@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: pip install "ruff==0.16.10"
+      - run: ruff check --output-format=github .
+      - run: ruff format --check .
+
+  test:
+    name: Tests (pytest, Python ${{ matrix.python-version }})
+    runs-on: ubuntu-24.04
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      - run: pytest --cov=src --cov-report=term-missing
+
+  integration:
+    name: Integration (Oracle Database Free container)
+    runs-on: ubuntu-24.04
+    needs: test
+    timeout-minutes: 30
+    env:
+      ORACLE_IMAGE: gvenzl/oracle-free:23.26.3-slim-faststart
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - name: Generate throw-away passwords (masked, never stored)
+        run: |
+          umask 077
+          sys_pw="S$(openssl rand -hex 16)"
+          mon_pw="M$(openssl rand -hex 16)"
+          echo "::add-mask::$sys_pw"
+          echo "::add-mask::$mon_pw"
+          printf '%s' "$sys_pw" > "$RUNNER_TEMP/sys_pw"
+          printf '%s' "$mon_pw" > "$RUNNER_TEMP/mon_pw"
+      - name: Start Oracle Database Free
+        run: |
+          docker run -d --name oracle -p 127.0.0.1:1521:1521 \
+            -e ORACLE_PASSWORD="$(cat "$RUNNER_TEMP/sys_pw")" \
+            --health-cmd healthcheck.sh --health-interval 10s --health-retries 60 \
+            "$ORACLE_IMAGE"
+          for _ in $(seq 1 90); do
+            state=$(docker inspect -f '{{.State.Health.Status}}' oracle)
+            [ "$state" = healthy ] && exit 0
+            sleep 10
+          done
+          docker logs oracle | tail -50
+          exit 1
+      - name: Create least-privilege monitoring user
+        run: |
+          {
+            echo "WHENEVER SQLERROR EXIT FAILURE"
+            echo "ALTER SESSION SET CONTAINER = FREEPDB1;"
+            echo "CREATE USER health_monitor IDENTIFIED BY \"$(cat "$RUNNER_TEMP/mon_pw")\";"
+            echo "GRANT CREATE SESSION, SELECT_CATALOG_ROLE TO health_monitor;"
+            echo "EXIT"
+          } | docker exec -i oracle sqlplus -s / as sysdba
+      - name: Run integration tests
+        env:
+          OHR_INTEGRATION: "1"
+          ORACLE_DSN: localhost:1521/FREEPDB1
+          ORACLE_USER: health_monitor
+        run: |
+          export ORACLE_PASSWORD_FILE="$RUNNER_TEMP/mon_pw"
+          pytest -m integration -v
+          oracle-health-report --no-banner --format text || [ $? -le 2 ]
+      - name: Stop container
+        if: always()
+        run: docker rm -f oracle >/dev/null 2>&1 || true
+
+  security:
+    name: Security scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip && pip install "bandit==1.9.4" pip-audit
+      - name: Bandit (static security analysis)
+        run: bandit -c pyproject.toml -r src
+      - name: pip-audit (known vulnerable dependencies)
+        run: pip install -e ".[dev]" && pip-audit --skip-editable
+      - name: Secret scan (gitleaks, full history)
+        run: >
+          docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.30.1
+          git /repo --redact --no-banner

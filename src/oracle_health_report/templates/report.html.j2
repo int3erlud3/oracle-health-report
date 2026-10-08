@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-{{ css_hash }}'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Oracle health report – {{ report.target }}</title>
+<style>{{ css | safe }}</style>
+</head>
+<body>
+<h1>Oracle health report <span class="badge {{ report.status }}">{{ report.status }}</span></h1>
+<div class="meta">{{ report.target }} · generated {{ report.generated_at }} · oracle-health-report {{ report.version }}</div>
+{% for s in report.sections %}
+<section id="{{ s.key }}">
+  <h2><span class="badge {{ s.status }}">{{ s.status }}</span> {{ s.title }}</h2>
+  {% if s.error %}<p class="empty">Not available: {{ s.error }}</p>{% endif %}
+  {% if s.findings %}
+  <ul class="findings">
+    {% for f in s.findings %}<li class="{{ f.severity }}">{{ f.message }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+  {% for t in s.tables %}
+  <h3>{{ t.title }}</h3>
+  {% if t.rows %}
+  <table>
+    <thead><tr>{% for col in t.rows[0].keys() %}<th>{{ col }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for row in t.rows %}<tr>{% for v in row.values() %}<td>{{ v if v is not none else "" }}</td>{% endfor %}</tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="empty">none</p>{% endif %}
+  {% endfor %}
+</section>
+{% endfor %}
+<footer>Read-only report. Part of the Bastion Ops Toolkit.</footer>
+</body>
+</html>
