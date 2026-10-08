@@ -1,7 +1,8 @@
 """All SQL used by the report. Every statement is a single read-only SELECT.
 
-The required privileges are covered by ``SELECT_CATALOG_ROLE`` (or the
-``SELECT ANY DICTIONARY`` system privilege) plus ``CREATE SESSION``.
+Required privileges: ``CREATE SESSION``, ``SELECT_CATALOG_ROLE`` and SELECT on
+``V_$DIAG_ALERT_EXT``, ``DBA_USERS_WITH_DEFPWD`` and ``AUDIT_UNIFIED_ENABLED_POLICIES``
+(see sql/create_monitoring_user.sql).
 """
 
 from __future__ import annotations

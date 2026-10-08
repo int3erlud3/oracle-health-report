@@ -86,6 +86,9 @@ jobs:
             echo "ALTER SESSION SET CONTAINER = FREEPDB1;"
             echo "CREATE USER health_monitor IDENTIFIED BY \"$(cat "$RUNNER_TEMP/mon_pw")\";"
             echo "GRANT CREATE SESSION, SELECT_CATALOG_ROLE TO health_monitor;"
+            echo "GRANT SELECT ON sys.v_\$diag_alert_ext TO health_monitor;"
+            echo "GRANT SELECT ON sys.dba_users_with_defpwd TO health_monitor;"
+            echo "GRANT SELECT ON sys.audit_unified_enabled_policies TO health_monitor;"
             echo "EXIT"
           } | docker exec -i oracle sqlplus -s / as sysdba
       - name: Run integration tests

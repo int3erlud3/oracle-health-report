@@ -51,9 +51,11 @@ the report is still produced.
 - **Read-only**: every statement is a single `SELECT` from [`queries.py`](src/oracle_health_report/queries.py),
   enforced by a guard, and the session starts with `SET TRANSACTION READ ONLY`.
   No PL/SQL, no DDL/DML, no dynamic SQL; parameters use bind variables.
-- **Least privilege**: the monitoring user needs only `CREATE SESSION` and
-  `SELECT_CATALOG_ROLE` (see [`sql/create_monitoring_user.sql`](sql/create_monitoring_user.sql)).
-  CI verifies that every section works with exactly these privileges.
+- **Least privilege**: the monitoring user needs only `CREATE SESSION`,
+  `SELECT_CATALOG_ROLE` and `SELECT` on three views that the role does not cover
+  (`V_$DIAG_ALERT_EXT`, `DBA_USERS_WITH_DEFPWD`, `AUDIT_UNIFIED_ENABLED_POLICIES`) – see
+  [`sql/create_monitoring_user.sql`](sql/create_monitoring_user.sql). CI verifies that every
+  section works with exactly these privileges.
 - **No credentials on the command line** (they would be visible in `ps` and shell
   history): connection settings come from the environment, a `chmod 600` password file
   or a wallet. There are intentionally no `--user`/`--password` options.

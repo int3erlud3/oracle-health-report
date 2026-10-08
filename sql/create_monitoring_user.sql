@@ -6,4 +6,7 @@ CREATE USER health_monitor IDENTIFIED BY "&monitor_password"
   PROFILE DEFAULT;
 GRANT CREATE SESSION TO health_monitor;
 GRANT SELECT_CATALOG_ROLE TO health_monitor;
--- SELECT_CATALOG_ROLE is not active in definer-rights code; the tool runs plain queries only.
+-- Three views used by the report are not covered by SELECT_CATALOG_ROLE:
+GRANT SELECT ON sys.v_$diag_alert_ext TO health_monitor;
+GRANT SELECT ON sys.dba_users_with_defpwd TO health_monitor;
+GRANT SELECT ON sys.audit_unified_enabled_policies TO health_monitor;

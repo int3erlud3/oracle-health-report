@@ -20,7 +20,7 @@ SECURITY = set(SECTION_KEYS) - HEALTH
 ENV_HELP = """\
 connection (environment only - credentials are never accepted as arguments):
   ORACLE_DSN              e.g. dbhost:1521/ORCLPDB1 or a tnsnames.ora alias
-  ORACLE_USER             monitoring account (needs CREATE SESSION + SELECT_CATALOG_ROLE)
+  ORACLE_USER             monitoring account (see sql/create_monitoring_user.sql)
   ORACLE_PASSWORD_FILE    file containing the password, mode 0600 (preferred)
   ORACLE_PASSWORD         password (alternative to ORACLE_PASSWORD_FILE)
   TNS_ADMIN               directory with tnsnames.ora / sqlnet.ora
